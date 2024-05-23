@@ -3,10 +3,11 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.generics import CreateAPIView, UpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.reverse import reverse
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth.tokens import default_token_generator
 from django.template.loader import render_to_string
-from django.utils.http import urlsafe_base64_encode
+from django.utils.http import urlsafe_base64_encode, urlencode
 from django.utils.encoding import force_bytes
 from rest_framework.views import APIView
 from sendgrid import sendgrid, Mail
@@ -41,6 +42,7 @@ class ForgetPasswordView(APIView):
     serializer_class = SendEmailSerializer
 
     def post(self, request, *args, **kwargs):
+        token = self.request.headers.get('Authorization')
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -51,11 +53,11 @@ class ForgetPasswordView(APIView):
             error = {"email": ["User with this email does not exist"]}
             raise ValidationError(detail=error)
 
-        user = user.first()
-        uid = urlsafe_base64_encode(force_bytes(user.id))
-        token = default_token_generator.make_token(user)
-        reset_url = \
-            f"{request.scheme}://{request.get_host()}/set-password/{uid}/{token}/"
+        base_url = f"{request.scheme}://{request.get_host()}"
+        path = reverse('set-password')  # URL pattern name for your view
+        query_string = urlencode({'Authorization': token})
+        reset_url = f"{base_url}{path}?{query_string}"
+
         context = {
             'reset_url': reset_url,
             'user': user,
